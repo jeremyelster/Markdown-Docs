@@ -1,0 +1,346 @@
+---
+title: "Togga FPL Introduction"
+author: "Jeremy Elster"
+date: "September 17, 2015"
+output: html_document
+runtime: shiny
+---
+
+
+# Introduction
+This year, my friends and I made the leap from the official Barclay’s Premier League Fantasy game to [Togga](http://playtogga.com). We looked forward to Togga’s draft-based version as a way to keep engagement and interpersonal interaction high. Another reason I pushed to make the swap is to gain access to Togga’s Opta-based scoring. I figured that even if my team crashed and burned, I’d be able to sift through the wealth of match and performance data to test hypotheses about the game I love.
+
+For handling and manipulating data, I use Excel (to help pull the stats from Togga’s website) and R. The plan is to one day publish content through a R Shiny web app but for now I will be using R Markdown. Let’s get down to business!
+
+# Togga Statistical Categories and Scoring
+
+## Togga Statistical Categories
+```{r, echo=FALSE, message=FALSE}
+list.of.packages <- c("dplyr", "ggvis", "DT", "data.table")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(dplyr)
+library(ggvis)
+library(DT)
+library(data.table)
+
+
+```
+
+The first thing we do is look at the data offered by Togga (and by extension, Opta). They offer 18 statistical categories for each player:
+
+Stat | Meaning
+-----|--------
+G    | Goals
+A    | Assists
+SOT  | Shots on Target
+CC   | Chances Created
+SCR  | Successful Crosses
+STO  | Successful Take Ons
+CS   | Clean Sheets
+INT  | Interceptions
+TW   | Tackles Won
+PS   | Penalty Saved
+SV   | Saves
+AER  | Aerials Won
+CLR  | Effective Clearance
+DIS  | Dispossessed
+OG   | Own Goals
+YC   | Yellow Cards
+RC   | Red Cards
+
+Each player has one team and one position and receives scores for each statistical category they register each week. Players who remain on the bench receive zeros. 
+
+```{r, echo=FALSE}
+# Call in correct csv and give name and convert to data.table
+
+allMatchPoints <- read.csv("./MyData/All Results Edited.csv")
+allMatchPoints <- as.data.table(allMatchPoints)
+
+print(getwd())
+print(cat(ls()))
+```
+
+## Scoring System
+Next, we needed to update the weekly scores to include [Togga's scoring system](https://www.playtogga.com/scoring), which assigns different values to each statistical category across the four positions - Forwards, Midfielders, Defenders, and Goalkeepers. The scoring table looks as follows:
+
+Event                | Forwards | Midfielders | Defenders | Goalkeepers
+---------------------|----------|-------------|-----------|------------
+Goals                | 9        | 9           | 10        | 10
+Assists              | 6        | 6           | 8         | 8
+Shots on Target      | 2        | 2           | 2         | 2
+Chances Created      | 3        | 3           | 3         | 6
+Successful Crosses   | 1        | 1           | 1         | 1
+Successful Take Ons  | 1        | 1           | 1         | 1
+Clean Sheets         | 0        | 1           | 6         | 8
+Interceptions        | 1        | 1           | 1         | 1
+Tackles Won          | 1        | 1           | 1         | 1
+Penalty Saved        | 0        | 0           | 0         | 8
+Saves                | 0        | 0           | 0         | 2
+Aerials Won          | 0.5      | 0.5         | 1         | 1
+Effective Clearances | 0        | 0           | 0.25      | 0.25
+Dispossessed         | -1       | -1          | -1        | -1
+Own Goals            | -9       | -9          | -9        | -9
+Yellow Cards         | -3       | -3          | -3        | -3
+Red Cards            | -7       | -7          | -7        | -7
+
+## Example of Points in Match and Fantasy Format
+The conversion from Match Scoring to Fantasy Scoring can be completed by reassigning values in columns based on the table above. To see an example of toggling back and forth, use the dropdown menu below to browse the statistics of early-season superstar Riyad Mahrez. As you can see, some useful context has been added to each player's gameweek such as score, home/away, and result:
+
+```{r, echo=FALSE, message=FALSE}
+allFantasyPoints <- read.csv("./MyData/All Results Edited.csv")
+  #read.csv("/Users/jeremyelster/Documents/R Projects/Togga Fantasy Football/Markdown Docs/MyData/All Results Edited.csv")
+#
+allFantasyPoints <- as.data.table(allFantasyPoints)
+convert2Fantasy <- function() {
+allFantasyPoints <- allFantasyPoints[, 
+                 c(9:27) := list(
+                   as.double(PTS),
+                   as.double(G),
+                   as.double(A),
+                   as.double(SOT),
+                   as.double(CC),
+                   as.double(SCR),
+                   as.double(STO),
+                   as.double(CS),
+                   as.double(INT),
+                   as.double(TW),
+                   as.double(PS),
+                   as.double(SV),
+                   as.double(AER),
+                   as.double(CLR),
+                   as.double(DIS),
+                   as.double(OG),
+                   as.double(GC),
+                   as.double(YC),
+                   as.double(RC))]
+allFantasyPoints <- allFantasyPoints[allFantasyPoints$Position == "For",
+                 c(10:27) := list(
+                   G*9,
+                   A*6,
+                   SOT*2,
+                   CC*3,
+                   SCR,
+                   STO,
+                   CS*0,
+                   INT,
+                   TW,
+                   PS*0,
+                   SV*0,
+                   AER*.5,
+                   CLR*0,
+                   -DIS,
+                   -OG*9,
+                   GC*0,
+                   -YC*3,
+                   -RC*7)]
+allFantasyPoints <- allFantasyPoints[allFantasyPoints$Position == "Mid",
+                 c(10:27) := list(
+                   G*9,
+                   A*6,
+                   SOT*2,
+                   CC*3,
+                   SCR,
+                   STO,
+                   CS,
+                   INT,
+                   TW,
+                   PS*0,
+                   SV*0,
+                   AER*.5,
+                   CLR*0,
+                   -DIS,
+                   -OG*9,
+                   GC*0,
+                   -YC*3,
+                   -RC*7)]
+allFantasyPoints <- allFantasyPoints[allFantasyPoints$Position == "Def",
+                 c(10:27) := list(
+                   G*10,
+                   A*8,
+                   SOT*2,
+                   CC*3,
+                   SCR,
+                   STO,
+                   CS*6,
+                   INT,
+                   TW,
+                   PS*0,
+                   SV*0,
+                   AER,
+                   CLR*.25,
+                   -DIS,
+                   -OG*9,
+                   -GC*2,
+                   -YC*3,
+                   -RC*7)]
+allFantasyPoints <- allFantasyPoints[allFantasyPoints$Position == "Goa",
+                 c(10:27) := list(
+                   G*10,
+                   A*8,
+                   SOT*2,
+                   CC*6,
+                   SCR,
+                   STO,
+                   CS*8,
+                   INT,
+                   TW,
+                   PS*8,
+                   SV*2,
+                   AER,
+                   CLR*.25,
+                   -DIS,
+                   -OG*9,
+                   -GC*2,
+                   -YC*3,
+                   -RC*7)]
+}
+convert2Fantasy()
+```
+
+```{r, echo=FALSE}
+inputPanel(
+  selectInput("pointsType", label = "Fantasy or Live Scoring:",
+              choices = c("Fantasy" = "allFantasyPoints", 
+                          "Live" = "allMatchPoints"), 
+              selected = "allMatchPoints")
+)
+
+renderTable({
+  if(input$pointsType == "allFantasyPoints") {
+    allFantasyPoints[allFantasyPoints$Player == "Riyad Mahrez",]
+    } else allMatchPoints[allMatchPoints$Player == "Riyad Mahrez", ]
+})
+
+```
+
+# Player and Team Points
+
+## Player Season Totals
+
+You may have noticed that the database has one row for each player's gameweek performance. We can easily sum player performance to see their cumulative performance over the season. Let's look at the top 10 point earners so far.
+
+```{r, echo=FALSE}
+allMatchPoints <- read.csv("./MyData/All Results Edited.csv")
+allMatchPoints <- as.data.table(allMatchPoints)
+
+allPlayerTotals <- allFantasyPoints[,lapply(.SD, sum), by = .(Team, Player, Position), .SDcols = c(9:27)]
+allPlayerMatchTotals <- allMatchPoints[,lapply(.SD, sum), by = .(Team, Player, Position), .SDcols = c(9:27)]
+
+inputPanel(
+  selectInput("pointsType", label = "Fantasy or Live Scoring:",
+              choices = c("Fantasy" = "allPlayerTotals", 
+                          "Live" = "allPlayerMatchTotals"), 
+              selected = "allPlayerMatchTotals")
+)
+
+DT::renderDataTable({
+  if(input$pointsType == "allPlayerMatchTotals") {
+    datatable(allPlayerMatchTotals[order(-PTS)])
+    } else datatable(allPlayerTotals[order(-PTS)])
+})
+```
+
+## Team Season Totals
+
+### Overall Team Scoring Table
+
+Let's reimagine the Barcaly's Premier League table as being ordered by fantasy points. Meaning - score the most fantasy points collectively and win the league. Through the first few gameweeks, this is what the table would look like:
+```{r, echo=FALSE}
+allTeamTotals <- allFantasyPoints[,lapply(.SD, sum), by = Team, .SDcols = c(9:27)][order(-PTS)]
+
+renderTable(allTeamTotals)
+```
+
+### Overall Team Scoring by Category
+
+Now that we have a full table of fantasy points for each team, we begin to see which teams are outperforming others according to Togga metrics. Let's further drill down into team performance by grouping the statistics into four categories - Offensive Points, Defensive Points, Goalkeeper Points, and Discipline Points. 
+
+Offensive Statistics Include:  
+*  Goals  
+*  Assists  
+*  Shots on Target  
+*  Chances Created  
+*  Successful Crosses  
+*  Successful Take Ons  
+*  Dispossessed  
+    
+Defensive Statistics Include:  
+* Clean Sheets  
+* Interceptions  
+* Tackles Won  
+* Aerials Won  
+* Effective Clearances  
+* Own Goals  
+* Goals Conceded  
+
+Goalkeeper Statistics Include:  
+* Saves  
+* Penalty Saves  
+
+Discipline Statistics Include:  
+* Yellow Cards  
+* Red Cards  
+
+Here is what the table looks like with just these categories:
+```{r, echo=FALSE}
+fantasyTeamCategory <- allTeamTotals
+fantasyTeamCategory <- fantasyTeamCategory[, 
+                                               .(Points = PTS,
+                                                 OffPoints = G + A + SOT + CC + SCR + STO + DIS,
+                                                 DefPoints = INT + TW + AER + OG + CS + CLR + GC,
+                                                 GKPoints = PS + SV,
+                                                 Discipline = YC + RC),
+                                               by = Team][order(-Points)]
+
+DT::renderDataTable({
+  datatable(fantasyTeamCategory)
+})
+```
+
+
+### Team Scoring by Week
+
+Similarly to how we can sum player totals, we can also get incredible breakdowns of points by team every week.  
+
+```{r, echo=FALSE}
+teamWeekTotals <- function(team) {
+  allFantasyPoints[allFantasyPoints$Team == team, lapply(.SD, sum), by = .(Team, GW, Home.Away, Result, Score, OPP), .SDcols = c(9:27)]
+}
+teamNames <- c("Arsenal", "Aston Villa", "Bournemouth", "Chelsea", "Crystal Palace", "Everton", "Leicester", "Liverpool", "Man City", "Man Utd", "Newcastle", "Norwich", "Southampton", "Stoke", "Sunderland", "Swansea", "Tottenham", "Watford", "West Brom", "West Ham")
+
+inputPanel(
+  selectInput("teamName", label = "Choose a team to see their gameweek scores:",
+              choices = teamNames,
+              selected = "Chelsea"))
+
+renderTable({
+  teamWeekTotals(input$teamName)
+})
+```
+
+### Togga Fantasy Table v. BPL Table
+
+Now that we have a full table of fantasy points for each team, we begin to see which teams are outperforming others according to Togga metrics (and the actual table). 
+
+```{r, echo=FALSE}
+tableComparison <- allTeamTotals[order(-PTS)][,c("Togga", "BPL") := 
+                                                list(1:20, c(1, 4, 11, 8, 2, 5, 12, 10, 6, 13, 15, 3, 7, 17, 14, 19, 9, 16, 18, 20))][,.(Team, Togga, BPL)]
+
+tableComparison %>%
+  ggvis(~BPL, ~Togga) %>%
+  layer_points() %>%
+  layer_model_predictions(stroke := "blue", model = "lm", formula = Togga ~ BPL)
+```
+
+```{r, echo=FALSE}
+lm(Togga ~ BPL, tableComparison)
+```
+
+As you can see, this data lends itself to a deep exploration of the connection between Fantasy Points, Statistics, and Performance in the Barclay's Premier League. Check this space to see updates soon.
+
+Jeremy
+
+
+
