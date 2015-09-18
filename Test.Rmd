@@ -1,0 +1,35 @@
+---
+title: "Togga FPL Introduction"
+author: "Jeremy Elster"
+date: "September 17, 2015"
+output: html_document
+runtime: shiny
+---
+
+
+# Introduction
+This year, my friends and I made the leap from the official Barclay’s Premier League Fantasy game to [Togga](http://playtogga.com). We looked forward to Togga’s draft-based version as a way to keep engagement and interpersonal interaction high. Another reason I pushed to make the swap is to gain access to Togga’s Opta-based scoring. I figured that even if my team crashed and burned, I’d be able to sift through the wealth of match and performance data to test hypotheses about the game I love.
+
+For handling and manipulating data, I use Excel (to help pull the stats from Togga’s website) and R. The plan is to one day publish content through a R Shiny web app but for now I will be using R Markdown. Let’s get down to business!
+
+# Togga Statistical Categories and Scoring
+
+## Togga Statistical Categories
+```{r, echo=FALSE, message=FALSE}
+list.of.packages <- c("dplyr", "ggvis", "DT", "data.table")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(dplyr)
+library(ggvis)
+library(DT)
+library(data.table)
+
+
+```
+
+```{r}
+print(getwd())
+print(cat(ls()))
+print(cd("resource_folder"))
+```
